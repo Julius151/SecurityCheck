@@ -1,0 +1,12 @@
+services:
+  scanner:
+    build: .
+    image: wp-offline-scanner:latest
+    volumes:
+      - ../Websites/${SITE_NAME}/src:/data/site:ro
+      - ./reports:/reports
+      - ./yara-rules:/rules/yara-rules:ro
+    environment:
+      - SITE_NAME=${SITE_NAME}
+      - SITE_DIR=/data/site
+      - REPORT_DIR=/reports

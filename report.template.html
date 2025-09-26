@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+    <head>
+    <meta charset="utf-8">
+    <title>Scan Report - {{SITE_NAME}}</title>
+    <style>
+        :root { --bg:#0b0f14; --fg:#e7edf4; --muted:#94a3b8; --card:#111827; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
+        body{font-family:system-ui, Arial; max-width:980px; margin:24px; color:#0b0f14;}
+        .meta{color:#334155}
+        .grid{display:grid; grid-template-columns:1fr; gap:12px}
+        .card{background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:14px}
+        .k{font-weight:600; letter-spacing:.2px}
+        details{border:1px solid #e2e8f0; border-radius:12px; background:#ffffff}
+        details summary{cursor:pointer; padding:12px 14px; font-weight:600; list-style:none; border-radius:12px}
+        details[open] summary{border-bottom:1px solid #e2e8f0; border-bottom-left-radius:0; border-bottom-right-radius:0}
+        .body{padding:12px 14px}
+        pre{background:#0b0f14; color:#e7edf4; padding:12px; border-radius:8px; overflow:auto; white-space:pre-wrap; margin:0}
+        code{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;}
+        .muted{color:#64748b}
+        .pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; background:#e2e8f0; color:#0b0f14; margin-left:8px}
+    </style>
+    </head>
+    <body>
+    <h1>Scan report for <em>{{SITE_NAME}}</em></h1>
+    <p class="meta">
+        <span class="k">Last scan:</span> {{TIMESTAMP}} &nbsp;·&nbsp;
+        <span class="k">Scanned directory:</span> <code>{{SITE_DIR}}</code>
+    </p>
+
+    <section class="grid">
+        <!-- CONTENT GOES HERE -->
+        {{RESULT_SECTIONS}}
+    </section>
+    </body>
+</html>

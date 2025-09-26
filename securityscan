@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: securityscan <site-folder> [--rebuild]
+
+IMAGE_NAME="wp-offline-scanner"
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+ROOT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"          # .../Web
+SEC_DIR="$SCRIPT_DIR"                                # .../Web/SecurityCheck
+SITES_ROOT="$ROOT_DIR/Websites"
+REPORTS_DIR="$SEC_DIR/reports"
+RULES_DIR="$SEC_DIR/yara-rules"
+
+SITE_NAME="${1:-}"
+REBUILD="${2:-}"
+
+# ---- Preflight
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: docker not found in PATH." >&2
+  exit 127
+fi
+
+if [[ -z "$SITE_NAME" || "$SITE_NAME" == "-h" || "$SITE_NAME" == "--help" ]]; then
+  echo "Usage: $(basename "$0") <site-folder> [--rebuild]"
+  echo "Scans Websites/<site>/[site/src|src|public_html|html|public|wordpress|webroot] and writes reports to SecurityCheck/reports/"
+  exit 1
+fi
+
+CANDIDATES=(
+  "$SITES_ROOT/$SITE_NAME/site/src"
+  "$SITES_ROOT/$SITE_NAME/src"
+  "$SITES_ROOT/$SITE_NAME/public_html"
+  "$SITES_ROOT/$SITE_NAME/html"
+  "$SITES_ROOT/$SITE_NAME/public"
+  "$SITES_ROOT/$SITE_NAME/wordpress"
+  "$SITES_ROOT/$SITE_NAME/webroot"
+)
+
+SITE_SRC=""
+for p in "${CANDIDATES[@]}"; do
+  if [[ -d "$p" ]] && find "$p" -mindepth 1 -type f -print -quit | grep -q .; then
+    SITE_SRC="$p"
+    break
+  fi
+done
+
+if [[ -z "$SITE_SRC" ]]; then
+  echo "ERROR: Could not find WordPress files for site '$SITE_NAME'. Looked in:"
+  for p in "${CANDIDATES[@]}"; do echo "  - $p"; done
+  echo
+  if [[ -d "$SITES_ROOT/$SITE_NAME" ]]; then
+    echo "Directory listing of '$SITES_ROOT/$SITE_NAME' (depth 2):"
+    find "$SITES_ROOT/$SITE_NAME" -maxdepth 2 -mindepth 1 -print | sed 's#^#  #'
+  else
+    echo "Path '$SITES_ROOT/$SITE_NAME' does not exist."
+  fi
+  exit 3
+fi
+
+mkdir -p "$REPORTS_DIR" "$RULES_DIR"
+
+# ---- Build
+echo "==> Building image '$IMAGE_NAME'..."
+if [[ "$REBUILD" == "--rebuild" ]]; then
+  docker build --no-cache -t "$IMAGE_NAME" "$SEC_DIR"
+else
+  docker build -t "$IMAGE_NAME" "$SEC_DIR"
+fi
+
+# ---- Optional template mount
+TEMPLATE_MOUNT=()
+if [[ -f "$SEC_DIR/report.template.html" ]]; then
+  TEMPLATE_MOUNT=(-v "$SEC_DIR/report.template.html":/workspace/report.template.html:ro)
+fi
+
+echo "==> Using site source: $SITE_SRC"
+echo "==> Running scan for site: $SITE_NAME"
+
+start_ts=$(date +%s)
+set +e
+docker run --rm \
+  -e SITE_NAME="$SITE_NAME" \
+  -v "$SITE_SRC":/data/site:ro \
+  -v "$REPORTS_DIR":/reports \
+  -v "$RULES_DIR":/rules/yara-rules:ro \
+  "${TEMPLATE_MOUNT[@]}" \
+  "$IMAGE_NAME"
+rc=$?
+set -e
+elapsed=$(( $(date +%s) - start_ts ))
+
+JSON_PATH="$REPORTS_DIR/${SITE_NAME}-scan.json"
+HTML_PATH="$REPORTS_DIR/${SITE_NAME}-scan.html"
+
+echo
+if [[ $rc -ne 0 ]]; then
+  echo "❌ Scan container exited with code $rc after ${elapsed}s."
+  echo "Check logs above. Try: $(basename "$0") $SITE_NAME --rebuild"
+  exit $rc
+fi
+
+echo "✅ Done in ${elapsed}s."
+echo "JSON report: $JSON_PATH"
+echo "HTML report: $HTML_PATH"
