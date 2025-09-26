@@ -1,24 +1,33 @@
 rule php_suspicious_eval_base64 {
   meta:
     author = "starter"
-    description = "Detect common obfuscated PHP webshell patterns"
+    description = "Obfuscated PHP/webshell patterns (tightened)"
     score = 5
   strings:
-    $s1 = "base64_decode(" nocase
-    $s2 = "eval(" nocase
-    $s3 = "gzinflate(" nocase
-    $s4 = "/e" ascii
+    $php_open = "<?php" ascii nocase
+    $b64 = "base64_decode(" nocase
+    $eval = "eval(" nocase
+    $inflate = "gzinflate(" nocase
+    $preg_e = /preg_replace\s*\(.+\/e/ nocase
   condition:
-    (any of ($s1, $s2, $s3, $s4)) and filesize < 200000
+    // scope to typical PHP/HTML, keep small files
+    (filename matches /\\.(php|phtml|php[3457]?|inc|tpl|html?)$/i) and
+    filesize < 300KB and
+    // require PHP context and at least one suspicious token
+    $php_open and 1 of ($b64, $eval, $inflate, $preg_e)
 }
 
 rule suspicious_iframe_hidden {
   meta:
-    description = "Hidden iframe typical in injected spam"
+    description = "Hidden iframe typical in injected spam (tightened)"
     score = 3
   strings:
-    $i1 = "<iframe" nocase
-    $i2 = "display:none" nocase
+    $ifr = "<iframe" nocase
+    $hide = "display:none" nocase
   condition:
-    all of them
+    (filename matches /\\.(php|phtml|html?)$/i) and
+    filesize < 300KB and
+    // require proximity (likely same tag/style block)
+    $ifr and $hide and
+    for any i in (1..#ifr): ( @ifr[i] <= @hide and (@hide - @ifr[i]) < 200 )
 }
